@@ -11,6 +11,7 @@ import pytest
 
 from uaap.agents.base import AgentCatalog
 from uaap.agents.finance import AGENT_ID, UniversalFinanceAgent
+from uaap.agents.lead_nurturing import LeadNurturing
 from uaap.api.deps import get_agent_catalog, get_approval_inbox
 from uaap.api.main import create_app
 from uaap.approvals.inbox import ApprovalInbox
@@ -46,6 +47,7 @@ class Env:
         )
         self.catalog = AgentCatalog(executor.agents, executor.registry)
         self.catalog.add(UniversalFinanceAgent(ScriptedModel(*plans), runner, metrics=AgentMetrics()))
+        self.catalog.add(LeadNurturing(runner, metrics=AgentMetrics()))
         self.inbox = ApprovalInbox()
         app = create_app()
         app.state.core_saas_adapter = CoreSaasAdapter(
@@ -177,3 +179,14 @@ async def test_unknown_agent_and_other_tenant(env: tuple[Env, httpx.AsyncClient]
     assert res.status_code == 404
     agents = (await c.get("/v1/agents", headers=_h(ACCOUNTANT_TOKEN))).json()["agents"]
     assert agents[0]["agent_id"] == AGENT_ID
+
+
+async def test_bot_list_hides_platform_bot_from_other_users(env: tuple[Env, httpx.AsyncClient]) -> None:
+    from ..tools.fakes import PLATFORM_OPERATOR_TOKEN
+
+    _, c = env
+    finance_user = (await c.get("/v1/agents", headers=_h(ACCOUNTANT_TOKEN))).json()["agents"]
+    platform_user = (await c.get("/v1/agents", headers=_h(PLATFORM_OPERATOR_TOKEN))).json()["agents"]
+    assert "lead-nurturing" not in {a["agent_id"] for a in finance_user}
+    assert "lead-nurturing" in {a["agent_id"] for a in platform_user}
+    assert AGENT_ID in {a["agent_id"] for a in finance_user}

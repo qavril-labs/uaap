@@ -105,6 +105,40 @@ TRIAL_BALANCE = ToolDefinition(
     },
 )
 
+LIST_LEADS = ToolDefinition(
+    name="platform_list_leads",
+    description="Marketing leads for the platform workspace, newest first.",
+    product_id=PRODUCT_ID,
+    tier=1,
+    permission="platform.leads.read",
+    input_schema={
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            "status": {"enum": ["new", "contacted", "booked", "closed"]},
+        },
+    },
+)
+
+CREATE_FOLLOWUP_DRAFT = ToolDefinition(
+    name="platform_create_followup_draft",
+    description="Save follow-up text for one lead for a person to review. It never sends anything.",
+    product_id=PRODUCT_ID,
+    tier=3,
+    permission="platform.leads.draft",
+    input_schema={
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["leadId", "subject", "body"],
+        "properties": {
+            "leadId": _UUID,
+            "subject": {"type": "string", "minLength": 1, "maxLength": 200},
+            "body": {"type": "string", "minLength": 1, "maxLength": 2000},
+        },
+    },
+)
+
 CREATE_ACCOUNT = ToolDefinition(
     name="ledger_create_account",
     description="Add an account to a company's chart of accounts.",
@@ -279,6 +313,27 @@ class CoreSaasAdapter:
             params={"companyId": args["companyId"], "asOf": args["asOf"]},
         )
 
+    async def list_leads(self, ctx: CallerContext, args: dict[str, Any]) -> dict[str, Any]:
+        return await send(
+            PRODUCT_ID,
+            self._client,
+            "GET",
+            "/v1/platform/leads",
+            headers=self._headers(ctx),
+            params={k: str(v) for k, v in args.items() if k in ("limit", "status")},
+        )
+
+    async def create_followup_draft(self, ctx: CallerContext, args: dict[str, Any]) -> dict[str, Any]:
+        lead_id = quote(str(args["leadId"]), safe="")
+        return await send(
+            PRODUCT_ID,
+            self._client,
+            "POST",
+            f"/v1/platform/leads/{lead_id}/followup-drafts",
+            headers=self._headers(ctx),
+            json_body={"subject": args["subject"], "body": args["body"]},
+        )
+
     async def create_account(self, ctx: CallerContext, args: dict[str, Any]) -> dict[str, Any]:
         return await send(
             PRODUCT_ID,
@@ -314,6 +369,8 @@ class CoreSaasAdapter:
 def register_core_saas_tools(registry: ToolRegistry, adapter: CoreSaasAdapter) -> None:
     registry.register(TRIAL_BALANCE, adapter.trial_balance)
     registry.register(CREATE_ACCOUNT, adapter.create_account)
+    registry.register(LIST_LEADS, adapter.list_leads)
+    registry.register(CREATE_FOLLOWUP_DRAFT, adapter.create_followup_draft)
     registry.register(POST_JOURNAL_ENTRY, adapter.post_journal_entry)
     registry.register(REVERSE_JOURNAL_ENTRY, adapter.reverse_journal_entry)
     for blocked in BLOCKED_TOOLS:

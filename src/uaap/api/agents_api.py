@@ -71,6 +71,21 @@ def _reply_json(reply: AgentReply) -> dict[str, Any]:
     }
 
 
+def _holds(permissions: tuple[str, ...], required: str) -> bool:
+    return any(
+        g == "*" or g == required or (g.endswith(".*") and required.startswith(g[:-1])) for g in permissions
+    )
+
+
+def _visible_to(caller: CallerContext, agent: BaseAgent) -> bool:
+    """A bot with grants is shown only to callers holding at least one of them; others see no card.
+
+    Bots without grants stay visible to everyone. The service still enforces permissions on every call.
+    """
+    grants = agent.principal.grants
+    return not grants or any(_holds(caller.permissions, g) for g in grants)
+
+
 @router.get("/v1/agents")
 async def list_agents(
     caller: Annotated[CallerContext, Depends(get_trusted_caller)],
@@ -87,6 +102,7 @@ async def list_agents(
                 "out_of_scope": list(a.card.out_of_scope),
             }
             for a in catalog.all()
+            if _visible_to(caller, a)
         ]
     }
 

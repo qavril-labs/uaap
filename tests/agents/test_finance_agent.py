@@ -6,7 +6,6 @@ import json
 from typing import Any
 
 import httpx
-import jsonschema
 import pytest
 
 from uaap.agents import finance
@@ -19,14 +18,12 @@ from uaap.gateway.providers.fake_server import FakeOllamaServer
 from uaap.gateway.providers.ollama import OllamaProvider
 from uaap.gateway.registry import ModelRegistry, Router
 from uaap.gateway.resilience import ResilientCaller
-from uaap.gateway.types import Message
 from uaap.obs.audit import InMemoryAuditSink
 from uaap.obs.metrics import AgentMetrics
 from uaap.runtime.approval.hooks import ApprovalEngine
 from uaap.runtime.checkpointer.in_memory import InMemoryCheckpointStore
 from uaap.runtime.runner import AgentRunner
-
-from ..tools.fakes import (
+from uaap.testing.fakes import (
     ACCOUNTANT_TOKEN,
     COMPANY,
     CONTROLLER_TOKEN,
@@ -37,32 +34,9 @@ from ..tools.fakes import (
     build_stack,
     caller,
 )
+from uaap.testing.models import ScriptedModel
 
 TODAY = "2026-11-09"
-
-
-class ScriptedModel:
-    """Returns scripted plans, validated against the agent's schema like the real gateway does."""
-
-    def __init__(self, *plans: dict[str, Any] | Exception) -> None:
-        self.plans = list(plans)
-        self.calls: list[tuple[Message, ...]] = []
-
-    async def complete_json(
-        self,
-        *,
-        tenant_id: str,
-        actor_id: str,
-        request_id: str,
-        messages: tuple[Message, ...],
-        schema: dict[str, Any],
-    ) -> dict[str, Any]:
-        self.calls.append(messages)
-        plan = self.plans.pop(0)
-        if isinstance(plan, Exception):
-            raise plan
-        jsonschema.validate(plan, schema)
-        return plan
 
 
 def _agent(model: Any, fake: FakeCoreSaas) -> tuple[UniversalFinanceAgent, InMemoryAuditSink]:

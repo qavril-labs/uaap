@@ -11,9 +11,17 @@ from typing import Annotated, Any, cast
 from fastapi import Depends, Header, Request
 from pydantic import SecretStr
 
+from uaap.agents.approval import ApprovalAgent
+from uaap.agents.approval_reminder import ApprovalReminder
 from uaap.agents.base import AgentCatalog
+from uaap.agents.document_intelligence import DocumentIntelligence
 from uaap.agents.finance import UniversalFinanceAgent
+from uaap.agents.lead_nurturing import LeadNurturing
+from uaap.agents.ledger_invariants import LedgerInvariantChecker
+from uaap.agents.onboard_ola import OnboardOla
+from uaap.agents.ticket_tess import TicketTess
 from uaap.approvals.inbox import ApprovalInbox
+from uaap.bots.catalog import external_specs
 from uaap.config import Settings
 from uaap.db.durable import (
     DurableCheckpointStore,
@@ -126,6 +134,82 @@ _CATALOG.add(
         max_input_chars=_SETTINGS.agent_max_input_chars,
     )
 )
+_CATALOG.add(
+    LedgerInvariantChecker(
+        _RUNNER,
+        metrics=_METRICS,
+        audit_sink=_AUDIT,
+        max_input_chars=_SETTINGS.agent_max_input_chars,
+    )
+)
+_CATALOG.add(
+    ApprovalReminder(
+        _RUNNER,
+        _INBOX,
+        metrics=_METRICS,
+        audit_sink=_AUDIT,
+        max_input_chars=_SETTINGS.agent_max_input_chars,
+    )
+)
+_CATALOG.add(
+    ApprovalAgent(
+        _MODEL_CLIENT,
+        _RUNNER,
+        _INBOX,
+        metrics=_METRICS,
+        audit_sink=_AUDIT,
+        max_input_chars=_SETTINGS.agent_max_input_chars,
+    )
+)
+_CATALOG.add(
+    TicketTess(
+        _MODEL_CLIENT,
+        _RUNNER,
+        metrics=_METRICS,
+        audit_sink=_AUDIT,
+        max_input_chars=_SETTINGS.agent_max_input_chars,
+    )
+)
+_CATALOG.add(
+    DocumentIntelligence(
+        _RUNNER,
+        metrics=_METRICS,
+        audit_sink=_AUDIT,
+        max_input_chars=_SETTINGS.agent_max_input_chars,
+    )
+)
+_CATALOG.add(
+    LeadNurturing(
+        _RUNNER,
+        metrics=_METRICS,
+        audit_sink=_AUDIT,
+        max_input_chars=_SETTINGS.agent_max_input_chars,
+    )
+)
+_CATALOG.add(
+    OnboardOla(
+        _MODEL_CLIENT,
+        _RUNNER,
+        metrics=_METRICS,
+        audit_sink=_AUDIT,
+        max_input_chars=_SETTINGS.agent_max_input_chars,
+    )
+)
+
+# Bots installed from their own repositories (entry point group "uaap.bots") enter service the same way.
+for _spec in external_specs():
+    _wiring: list[Any] = [_MODEL_CLIENT] if _spec.needs_model else []
+    _wiring.append(_RUNNER)
+    if _spec.needs_inbox:
+        _wiring.append(_INBOX)
+    _CATALOG.add(
+        _spec.load()(
+            *_wiring,
+            metrics=_METRICS,
+            audit_sink=_AUDIT,
+            max_input_chars=_SETTINGS.agent_max_input_chars,
+        )
+    )
 
 
 @dataclass(frozen=True)
