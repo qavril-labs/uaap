@@ -10,6 +10,14 @@ backend and a model, so the same bot runs in-process, behind the HTTP service, o
 """
 
 from uaap.bots.catalog import BOTS, BotSpec, all_specs, get_spec
-from uaap.bots.host import BotHost
 
 __all__ = ["BOTS", "BotHost", "BotSpec", "all_specs", "get_spec"]
+
+
+def __getattr__(name: str):  # type: ignore[no-untyped-def]
+    """BotHost pulls in the whole runtime, so it loads on first use; the catalog and MCP server stay light."""
+    if name == "BotHost":
+        from uaap.bots.host import BotHost
+
+        return BotHost
+    raise AttributeError(name)

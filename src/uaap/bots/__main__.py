@@ -45,7 +45,8 @@ def main(argv: list[str]) -> int:
     if argv[0] == "mcp":
         from uaap.bots.mcp_server import serve
 
-        return asyncio.run(serve())
+        ids = [argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--bot"]
+        return asyncio.run(serve(ids or None))
     usage = "usage: python -m uaap.bots [list | describe <bot-id> | run <bot-id> <message> | mcp]"
     print(usage, file=sys.stderr)
     return 2

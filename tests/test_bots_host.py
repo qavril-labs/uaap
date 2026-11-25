@@ -84,7 +84,7 @@ async def test_mcp_lists_and_calls_deterministic_bots() -> None:
 
     _, adapter = build_stack(FakeCoreSaas())
 
-    async def run(bot_id: str, message: str) -> Any:
+    async def run(bot_id: str, message: str, **_: Any) -> Any:
         return await run_bot(
             bot_id, message, core_url="x", token=ACCOUNTANT_TOKEN, company_id=COMPANY,
             today="2026-11-09", adapter=adapter,
@@ -111,3 +111,15 @@ async def test_mcp_lists_and_calls_deterministic_bots() -> None:
          "params": {"name": "ticket-tess", "arguments": {}}}, run
     )
     assert bad and bad["error"]["code"] == -32602
+
+
+def test_mcp_tool_list_can_serve_one_bot_with_examples() -> None:
+    from uaap.bots.mcp_server import select_specs, tool_list
+
+    only = tool_list(select_specs(["lead-nurturing"], model_available=False))
+    assert [t["name"] for t in only] == ["lead-nurturing"]
+    assert "Examples:" in only[0]["description"]
+    assert "company_id" in only[0]["inputSchema"]["properties"]
+    # A model-based bot is left out when no model is configured, never listed and then failing.
+    assert select_specs(["ticket-tess"], model_available=False) == []
+    assert [b.id for b in select_specs(["ticket-tess"], model_available=True)] == ["ticket-tess"]
